@@ -37,5 +37,6 @@ namespace reachability_map_visualizer_sample{
     viewer->objects(robot);
     reachability_map_visualizer::visualizeMap(map, viewer);
     viewer->drawObjects();
+    while(true);
   }
 }

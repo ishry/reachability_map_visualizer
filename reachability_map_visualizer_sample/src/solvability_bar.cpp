@@ -27,5 +27,6 @@ namespace reachability_map_visualizer_sample{
     solvabilityBar->setRootLink(rootLink);
     viewer->objects(solvabilityBar);
     viewer->drawObjects();
+    while(true);
   }
 }

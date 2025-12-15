@@ -1,8 +1,11 @@
+#include <mutex>
 #include <reachability_map_visualizer/reachability_map_visualizer.h>
 #include <cnoid/MeshGenerator>
 #include <cnoid/YAMLWriter>
 #include <cnoid/YAMLReader>
 #include <random>
+#include <vector>
+#include <iomanip>
 
 namespace reachability_map_visualizer {
   void frame2Link(const std::vector<double>& frame, const std::vector<cnoid::LinkPtr>& links){
@@ -61,69 +64,128 @@ namespace reachability_map_visualizer {
       }
     }
   }
-  void createMap(const std::shared_ptr<ReachabilityMapParam>& param, const std::shared_ptr<ReachabilityMap>& map) {
+
+  void createMapSub(const std::shared_ptr<ReachabilityMapParam>& param, const std::shared_ptr<ReachabilityMap>& map,
+                    const std::vector<cnoid::Vector3>& xyz_table, const std::vector<double>& init_pose, std::mutex& mutex, int thread_num) {
+    cnoid::BodyPtr tmp_robot = param->robot->clone();
+    std::vector<cnoid::LinkPtr> tmp_variables;
+    for (int v_num = 0; v_num < param->variables.size(); v_num++) {
+      tmp_variables.push_back(tmp_robot->joint(param->variables[v_num]->jointId()));
+    }
+    tmp_robot->rootLink()->T() = param->robot->rootLink()->T();
+    tmp_robot->rootLink()->v() = param->robot->rootLink()->v();
+    tmp_robot->rootLink()->w() = param->robot->rootLink()->w();
+    for(int i=0;i<tmp_robot->numJoints();i++){
+      tmp_robot->joint(i)->q() = param->robot->joint(i)->q();
+    }
+
+    for (int xyz_index = 0; xyz_index < xyz_table.size(); xyz_index++) {
+      double solveCount = 0.0;
+      cnoid::Isometry3 targetPose;
+      targetPose.translation() = param->origin + xyz_table[xyz_index];
+      for (int i=0; i<param->testPerGrid; i++) {
+        bool solved = false;
+        targetPose.linear() = Eigen::Quaterniond::UnitRandom().matrix();
+        for (int e=0; e< param->endEffectors.size() && !solved; e++) {
+          // joint limit
+          std::vector<std::shared_ptr<ik_constraint2::IKConstraint> > constraints0;
+          for(int j_id=0;j_id<tmp_robot->numJoints();j_id++){
+            std::shared_ptr<ik_constraint2::JointLimitConstraint> constraint = std::make_shared<ik_constraint2::JointLimitConstraint>();
+            constraint->joint() = tmp_robot->joint(j_id);
+            constraints0.push_back(constraint);
+          }
+          // ee
+          std::vector<std::shared_ptr<ik_constraint2::IKConstraint> > constraints1;
+          std::shared_ptr<ik_constraint2::PositionConstraint> ee_constraint = std::make_shared<ik_constraint2::PositionConstraint>();
+          ee_constraint->A_link() = tmp_robot->joint(param->endEffectors[e].parent->jointId());
+          ee_constraint->A_localpos() = param->endEffectors[e].localPose;
+          ee_constraint->B_link() = nullptr;
+          ee_constraint->B_localpos() = targetPose;
+          ee_constraint->eval_link() = nullptr;
+          ee_constraint->eval_localR() = targetPose.linear();
+          ee_constraint->precision() = param->posResolution;
+          for (int w=0;w<3;w++) {
+            ee_constraint->weight()[w+3] = param->weight[w+3] * param->posResolution / 1e-3;
+          }
+          constraints1.push_back(ee_constraint);
+          std::vector<std::vector<std::shared_ptr<ik_constraint2::IKConstraint> > > all_constraints{constraints0, constraints1};
+          std::vector<std::shared_ptr<prioritized_qp_base::Task> > prevTasks;
+
+          frame2Link(init_pose,tmp_variables);
+          tmp_robot->calcForwardKinematics();
+          tmp_robot->calcCenterOfMass();
+          solved = prioritized_inverse_kinematics_solver2::solveIKLoop(tmp_variables,
+                                                                       all_constraints,
+                                                                       prevTasks,
+                                                                       param->pikParam
+                                                                       );
+          for (int sol=0;sol<param->initialSolutionNum && !solved;sol++) {
+            std::vector<double> initialSolution;
+            randomFrame(tmp_variables,initialSolution);
+            frame2Link(initialSolution,tmp_variables);
+            tmp_robot->calcForwardKinematics();
+            tmp_robot->calcCenterOfMass();
+            solved = prioritized_inverse_kinematics_solver2::solveIKLoop(tmp_variables,
+                                                                         all_constraints,
+                                                                         prevTasks,
+                                                                         param->pikParam
+                                                                         );
+          }
+          frame2Link(init_pose,tmp_variables);
+          tmp_robot->calcForwardKinematics();
+          tmp_robot->calcCenterOfMass();
+        }
+        if (solved) solveCount += 1;
+      }
+      double solvability = solveCount / param->testPerGrid;
+      std::cerr << "thread : " << thread_num;
+      std::cerr << std::fixed << std::setprecision(2);
+      std::cerr << "  x : " << xyz_table[xyz_index][0] << " y : " << xyz_table[xyz_index][1] << " z : " << xyz_table[xyz_index][2];
+      std::cerr << " solvability : " << solvability << std::flush;
+      std::cerr << " progress: " << xyz_index << "/" << xyz_table.size() << std::endl;
+      if (solvability>0.0){
+        std::lock_guard<std::mutex> lock(mutex);
+        map->reachabilityMap.push_back(std::pair<cnoid::Vector3, double>(xyz_table[xyz_index], solvability));
+      }
+    }
+  }
+
+  void createMap(const std::shared_ptr<ReachabilityMapParam>& param, const std::shared_ptr<ReachabilityMap>& map, int thread_num) {
+    std::mutex mutex;
+
     map->reachabilityMap.clear();
     map->origin = param->origin;
     map->posResolution = param->posResolution;
     std::vector<double> initPose;
     link2Frame(param->variables, initPose);
 
-    for (double grid_x = - param->size[0]/2; grid_x <= param->size[0] / 2; grid_x += param->posResolution) {
-      for (double grid_y = - param->size[1]/2; grid_y <= param->size[1] / 2; grid_y += param->posResolution) {
-        for (double grid_z = - param->size[2]/2; grid_z <= param->size[2] / 2; grid_z += param->posResolution) {
-          double solveCount = 0.0;
-          cnoid::Isometry3 targetPose;
-          targetPose.translation() = param->origin + cnoid::Vector3(grid_x, grid_y, grid_z);
-          for (int i=0; i<param->testPerGrid; i++) {
-            bool solved = false;
-            targetPose.linear() = Eigen::Quaterniond::UnitRandom().matrix();
-            for (int e=0; e< param->endEffectors.size() && !solved; e++) {
-              std::shared_ptr<ik_constraint2::PositionConstraint> constraint = std::make_shared<ik_constraint2::PositionConstraint>();
-              constraint->A_link() = param->endEffectors[e].parent;
-              constraint->A_localpos() = param->endEffectors[e].localPose;
-              constraint->B_link() = nullptr;
-              constraint->B_localpos() = targetPose;
-              constraint->eval_link() = nullptr;
-              constraint->eval_localR() = targetPose.linear();
-              constraint->precision() = param->posResolution;
-              for (int w=0;w<3;w++) {
-                constraint->weight()[w+3] = param->weight[w+3] * param->posResolution / 1e-3;
-              }
-              std::vector<std::vector<std::shared_ptr<ik_constraint2::IKConstraint> > > constraints;
-              for (int c=0; c<param->constraints.size();c++) constraints.push_back(param->constraints[c]);
-              constraints.push_back(std::vector<std::shared_ptr<ik_constraint2::IKConstraint>>{constraint});
-              std::vector<std::shared_ptr<prioritized_qp_base::Task> > prevTasks;
-              frame2Link(initPose,param->variables);
-              solved = prioritized_inverse_kinematics_solver2::solveIKLoop(param->variables,
-                                                                           constraints,
-                                                                           prevTasks,
-                                                                           param->pikParam
-                                                                           );
-              for (int sol=0;sol<param->initialSolutionNum && !solved;sol++) {
-                std::vector<double> initialSolution;
-                randomFrame(param->variables,initialSolution);
-                frame2Link(initialSolution,param->variables);
-                param->robot->calcForwardKinematics();
-                param->robot->calcCenterOfMass();
-                solved = prioritized_inverse_kinematics_solver2::solveIKLoop(param->variables,
-                                                                             constraints,
-                                                                             prevTasks,
-                                                                             param->pikParam
-                                                                             );
-              }
-              frame2Link(initPose,param->variables);
-              param->robot->calcForwardKinematics();
-              param->robot->calcCenterOfMass();
-            }
-            if (solved) solveCount += 1;
-          }
-          double solvability = solveCount / param->testPerGrid;
-          std::cerr << "x : " << grid_x << " y : " << grid_y << " z : " << grid_z << " solvability : " << solvability << std::endl;
-          if (solvability>0.0){
-            map->reachabilityMap.push_back(std::pair<cnoid::Vector3, double>(cnoid::Vector3(grid_x, grid_y, grid_z), solvability));
+    std::vector<cnoid::Vector3> xyz_table_all;
+    std::vector<std::vector<cnoid::Vector3>> xyz_table_block(thread_num);
+    int index = 0;
+    int grid_x_num = static_cast<int>(param->size[0] / param->posResolution) + 1;
+    int grid_y_num = static_cast<int>(param->size[1] / param->posResolution) + 1;
+    int grid_z_num = static_cast<int>(param->size[2] / param->posResolution) + 1;
+    int grid_all = grid_x_num * grid_y_num * grid_z_num;
+    for (int index_x = 0; index_x < grid_x_num; index_x++) {
+      for (int index_y = 0; index_y < grid_y_num; index_y++) {
+        for (int index_z = 0; index_z < grid_z_num; index_z++) {
+          double grid_x = - param->size[0]/2 + index_x * param->posResolution;
+          double grid_y = - param->size[1]/2 + index_y * param->posResolution;
+          double grid_z = - param->size[2]/2 + index_z * param->posResolution;
+          xyz_table_block[index].push_back(cnoid::Vector3(grid_x, grid_y, grid_z));
+          if (xyz_table_block[index].size() >= (grid_all / thread_num) + (index < grid_all % thread_num ? 1 : 0)) {
+              index++;
           }
         }
       }
+    }
+
+    std::vector<std::thread> threads;
+    for(size_t i=0; i<thread_num; ++i){
+        threads.emplace_back(std::thread(createMapSub, std::ref(param), std::ref(map), std::ref(xyz_table_block[i]), std::ref(initPose), std::ref(mutex), i));
+    }
+    for(auto& thread : threads){
+        thread.join();
     }
   }
   void visualizeMap(const std::shared_ptr<ReachabilityMap>& map, const std::shared_ptr<choreonoid_viewer::Viewer>& viewer) {

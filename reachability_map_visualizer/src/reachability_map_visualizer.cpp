@@ -67,7 +67,11 @@ namespace reachability_map_visualizer {
 
   void createMapSub(const std::shared_ptr<ReachabilityMapParam>& param, const std::shared_ptr<ReachabilityMap>& map,
                     const std::vector<cnoid::Vector3>& xyz_table, const std::vector<double>& init_pose, std::mutex& mutex, int thread_num) {
-    cnoid::BodyPtr tmp_robot = param->robot->clone();
+    cnoid::BodyPtr tmp_robot;
+    {
+     std::lock_guard<std::mutex> lock(mutex);
+     tmp_robot = param->robot->clone();
+    }
     std::vector<cnoid::LinkPtr> tmp_variables;
     for (int v_num = 0; v_num < param->variables.size(); v_num++) {
       tmp_variables.push_back(tmp_robot->joint(param->variables[v_num]->jointId()));

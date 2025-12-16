@@ -55,7 +55,7 @@ namespace reachability_map_visualizer_sample
     param->variables.push_back(param->robot->joint("TAIL_JOINT10"));
     param->variables.push_back(param->robot->joint("TAIL_JOINT11"));
     reachability_map_visualizer::EndEffector ee;
-    ee.parent = param->robot->link("TAIL_LINK12");
+    ee.parent = param->robot->link("TAIL_JOINT11");
     ee.localPose.translation() = cnoid::Vector3(0.0, -0.25, 0.0);
     ee.localPose.linear() = cnoid::rotFromRpy(3.14, 0.0, -1.57);
     param->endEffectors.push_back(ee);

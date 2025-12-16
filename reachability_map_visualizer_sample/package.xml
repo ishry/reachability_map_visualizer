@@ -15,5 +15,6 @@
   <depend>choreonoid</depend>
   <depend>choreonoid_viewer</depend>
   <depend>jvrc_models</depend>
+  <depend>manta_models</depend>
 
 </package>

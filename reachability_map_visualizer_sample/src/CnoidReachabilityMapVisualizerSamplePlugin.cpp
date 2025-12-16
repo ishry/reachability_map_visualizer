@@ -22,6 +22,15 @@ namespace reachability_map_visualizer_sample{
   };
   typedef cnoid::ref_ptr<jaxon_footItem> jaxon_footItemPtr;
 
+  void manta_tail();
+  class manta_tailItem : public choreonoid_viewer::ViewerBaseItem {
+  public:
+    static void initializeClass(cnoid::ExtensionManager* ext){ ext->itemManager().registerClass<manta_tailItem>("manta_tailItem"); }
+  protected:
+    virtual void main() override{ manta_tail(); return;}
+  };
+  typedef cnoid::ref_ptr<manta_tailItem> manta_tailItemPtr;
+
   void visualize();
   class visualizeItem : public choreonoid_viewer::ViewerBaseItem {
   public:
@@ -51,6 +60,7 @@ namespace reachability_map_visualizer_sample{
     {
       jaxon_handItem::initializeClass(this);
       jaxon_footItem::initializeClass(this);
+      manta_tailItem::initializeClass(this);
       visualizeItem::initializeClass(this);
       solvability_barItem::initializeClass(this);
       return true;

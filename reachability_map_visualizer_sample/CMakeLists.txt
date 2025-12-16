@@ -10,6 +10,7 @@ find_package(catkin REQUIRED COMPONENTS
   choreonoid_viewer
   roslib
   jvrc_models
+  manta_models
   )
 
 find_package(choreonoid REQUIRED)
@@ -27,6 +28,7 @@ add_library(CnoidReachabilityMapVisualizerSamplePlugin SHARED
   src/CnoidReachabilityMapVisualizerSamplePlugin.cpp
   src/jaxon_hand.cpp
   src/jaxon_foot.cpp
+  src/manta_tail.cpp
   src/visualize.cpp
   src/solvability_bar.cpp
   )

@@ -24,6 +24,7 @@ namespace reachability_map_visualizer {
     cnoid::Vector3 origin = cnoid::Vector3::Zero();
     cnoid::Vector6 weight; // ランダムに選んだ姿勢座標系
     prioritized_inverse_kinematics_solver2::IKParam pikParam;
+    double torque_limit = 0; 
     ReachabilityMapParam(){
       pikParam.maxIteration = 30;
       weight << 1.0, 1.0, 1.0, 1.0, 1.0, 1.0; // IKはgridの中心位置に対して解くので、posResolutionを大きくすればするほど、たまたま中心では解けないがその近辺では解ける、ということが起こる. 位置に関する重みをprecision / posResolution倍しておくとよい.

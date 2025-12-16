@@ -3,6 +3,7 @@
 #include <cnoid/MeshGenerator>
 #include <cnoid/YAMLWriter>
 #include <cnoid/YAMLReader>
+#include <cnoid/src/Body/InverseDynamics.h>
 #include <random>
 #include <vector>
 #include <iomanip>
@@ -65,6 +66,42 @@ namespace reachability_map_visualizer {
     }
   }
 
+  bool checkTorque(cnoid::BodyPtr& robot, int torque_limit, std::mutex& mutex)
+  {
+    robot->rootLink()->dv() = cnoid::Vector3(0.0, 0.0, 9.8); //ルートリンクをz正に加速
+    robot->rootLink()->dw().setZero();
+    robot->calcForwardKinematics(true,true); // 重力加速度が各リンクに伝播される
+    robot->calcCenterOfMass();
+    cnoid::calcInverseDynamics(robot->rootLink()); // 重力補償トルクがtmp_robot->joint(j)->u()に書き込まれる
+    
+    //check torque
+    for(int i = 2; i <= 13; ++i)
+    {
+      double torque = robot->joint(i)->u();
+      if(torque < -torque_limit || torque > torque_limit)
+      {
+	      return false;
+      }
+    }
+
+    //debug log
+    {
+      std::lock_guard<std::mutex> lock(mutex);
+      std::cerr << "torque : [";
+      std::cerr << std::fixed << std::setprecision(2); // 小数点以下を2桁に固定
+      for(int i = 2; i <= 13; ++i)
+      {
+        std::cerr << std::setw(7) << robot->joint(i)->u();
+        if(i < 13)
+        {
+          std::cerr << ", ";
+        }
+      }
+      std::cerr << "]" << std::endl;
+    }
+    return true;
+  }
+
   void createMapSub(const std::shared_ptr<ReachabilityMapParam>& param, const std::shared_ptr<ReachabilityMap>& map,
                     const std::vector<cnoid::Vector3>& xyz_table, const std::vector<double>& init_pose, std::mutex& mutex, int thread_num) {
     cnoid::BodyPtr tmp_robot;
@@ -123,6 +160,10 @@ namespace reachability_map_visualizer {
                                                                        prevTasks,
                                                                        param->pikParam
                                                                        );
+          if(solved){
+            solved = checkTorque(std::ref(tmp_robot), param->torque_limit, std::ref(mutex));
+          }
+
           for (int sol=0;sol<param->initialSolutionNum && !solved;sol++) {
             std::vector<double> initialSolution;
             randomFrame(tmp_variables,initialSolution);
@@ -134,6 +175,9 @@ namespace reachability_map_visualizer {
                                                                          prevTasks,
                                                                          param->pikParam
                                                                          );
+	          if(solved){
+              solved = checkTorque(std::ref(tmp_robot), param->torque_limit, std::ref(mutex));
+            }
           }
           frame2Link(init_pose,tmp_variables);
           tmp_robot->calcForwardKinematics();
@@ -142,11 +186,14 @@ namespace reachability_map_visualizer {
         if (solved) solveCount += 1;
       }
       double solvability = solveCount / param->testPerGrid;
-      std::cerr << "thread : " << thread_num;
-      std::cerr << std::fixed << std::setprecision(2);
-      std::cerr << "  x : " << xyz_table[xyz_index][0] << " y : " << xyz_table[xyz_index][1] << " z : " << xyz_table[xyz_index][2];
-      std::cerr << " solvability : " << solvability << std::flush;
-      std::cerr << " progress: " << xyz_index << "/" << xyz_table.size() << std::endl;
+      {
+        std::lock_guard<std::mutex> lock(mutex);
+        std::cerr << "thread : " << thread_num;
+        std::cerr << std::fixed << std::setprecision(2);
+        std::cerr << "  x : " << xyz_table[xyz_index][0] << " y : " << xyz_table[xyz_index][1] << " z : " << xyz_table[xyz_index][2];
+        std::cerr << " solvability : " << solvability << std::flush;
+        std::cerr << " progress: " << xyz_index << "/" << xyz_table.size() << std::endl;
+      }
       if (solvability>0.0){
         std::lock_guard<std::mutex> lock(mutex);
         map->reachabilityMap.push_back(std::pair<cnoid::Vector3, double>(xyz_table[xyz_index], solvability));

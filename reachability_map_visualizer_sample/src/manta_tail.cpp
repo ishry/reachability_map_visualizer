@@ -62,8 +62,8 @@ namespace reachability_map_visualizer_sample
     param->posResolution = 0.2;
     param->pikParam.maxIteration = 30;
     param->testPerGrid = 10;
-    param->origin = cnoid::Vector3(0.0, 0.0, 1); // IKが解けない時に無駄な計算をしてしまうので、ぎりぎりのサイズにしたほうが速い
-    param->size = cnoid::Vector3(3.5, 3.5, 2.5);
+    param->origin = cnoid::Vector3(0.0, 0.0, 1.5); // IKが解けない時に無駄な計算をしてしまうので、ぎりぎりのサイズにしたほうが速い
+    param->size = cnoid::Vector3(4, 4, 3);
     param->weight[5] = 0.0;
     std::shared_ptr<reachability_map_visualizer::ReachabilityMap> map = std::make_shared<reachability_map_visualizer::ReachabilityMap>();
     reachability_map_visualizer::createMap(param, map,5);

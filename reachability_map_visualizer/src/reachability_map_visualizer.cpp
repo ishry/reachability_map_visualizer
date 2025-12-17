@@ -7,6 +7,7 @@
 #include <random>
 #include <vector>
 #include <iomanip>
+#include <array>
 
 namespace reachability_map_visualizer {
   void frame2Link(const std::vector<double>& frame, const std::vector<cnoid::LinkPtr>& links){
@@ -66,7 +67,7 @@ namespace reachability_map_visualizer {
     }
   }
 
-  bool checkTorque(cnoid::BodyPtr& robot, int torque_limit, std::mutex& mutex)
+  bool checkTorque(cnoid::BodyPtr& robot, const std::shared_ptr<ReachabilityMapParam>& param, std::mutex& mutex)
   {
     robot->rootLink()->dv() = cnoid::Vector3(0.0, 0.0, 9.8); //ルートリンクをz正に加速
     robot->rootLink()->dw().setZero();
@@ -74,13 +75,24 @@ namespace reachability_map_visualizer {
     robot->calcCenterOfMass();
     cnoid::calcInverseDynamics(robot->rootLink()); // 重力補償トルクがtmp_robot->joint(j)->u()に書き込まれる
     
+    // 有効な関節idを取得
+    bool is_valid_id[16] = {false};
+    for (const auto& var : param->variables) {
+      int id = var->jointId();
+      if (id >= 2 && id <= 13) is_valid_id[id] = true;
+    }
+
+    std::array<double, 16> checked_torques = {0.0};
+    double torque_limit = param->torque_limit;
+    
     //check torque
-    for(int i = 2; i <= 13; ++i)
-    {
-      double torque = robot->joint(i)->u();
-      if(torque < -torque_limit || torque > torque_limit)
-      {
-	      return false;
+    for(int i = 0; i <= 15; ++i) {
+    if (is_valid_id[i]) {
+        double t = robot->joint(i)->u();
+        if (t < -torque_limit || t > torque_limit) {
+            return false; 
+        }
+        checked_torques[i] = t;
       }
     }
 
@@ -88,16 +100,19 @@ namespace reachability_map_visualizer {
     {
       std::lock_guard<std::mutex> lock(mutex);
       std::cerr << "torque : [";
-      std::cerr << std::fixed << std::setprecision(2); // 小数点以下を2桁に固定
-      for(int i = 2; i <= 13; ++i)
-      {
-        std::cerr << std::setw(7) << robot->joint(i)->u();
-        if(i < 13)
-        {
-          std::cerr << ", ";
-        }
+      std::cerr << std::fixed << std::setprecision(2);
+      for(int i = 2; i <= 13; ++i) {
+        std::cerr << std::setw(7) << checked_torques[i];
+        if(i < 13) std::cerr << ", ";
       }
       std::cerr << "]" << std::endl;
+
+      std::cerr << "q: [";
+        for(int i = 2; i <= 13; ++i) {
+            std::cerr << std::setw(5) << robot->joint(i)->q(); // ここで角度を取得
+            if(i < 13) std::cerr << ", ";
+        }
+        std::cerr << "]" << std::endl; // 最後に改行
     }
     return true;
   }
@@ -161,7 +176,7 @@ namespace reachability_map_visualizer {
                                                                        param->pikParam
                                                                        );
           if(solved){
-            solved = checkTorque(std::ref(tmp_robot), param->torque_limit, std::ref(mutex));
+            solved = checkTorque(std::ref(tmp_robot), std::ref(param), std::ref(mutex));
           }
 
           for (int sol=0;sol<param->initialSolutionNum && !solved;sol++) {
@@ -176,7 +191,7 @@ namespace reachability_map_visualizer {
                                                                          param->pikParam
                                                                          );
 	          if(solved){
-              solved = checkTorque(std::ref(tmp_robot), param->torque_limit, std::ref(mutex));
+              solved = checkTorque(std::ref(tmp_robot), std::ref(param), std::ref(mutex));
             }
           }
           frame2Link(init_pose,tmp_variables);

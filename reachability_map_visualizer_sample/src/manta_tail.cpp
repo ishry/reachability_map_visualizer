@@ -7,9 +7,8 @@
 
 namespace reachability_map_visualizer_sample
 {
-  void manta_tail()
+  std::shared_ptr<reachability_map_visualizer::ReachabilityMapParam> create_manta_tail_param()
   {
-    std::shared_ptr<choreonoid_viewer::Viewer> viewer = std::make_shared<choreonoid_viewer::Viewer>();
     std::shared_ptr<reachability_map_visualizer::ReachabilityMapParam> param = std::make_shared<reachability_map_visualizer::ReachabilityMapParam>();
 
     cnoid::BodyLoader bodyLoader;
@@ -23,7 +22,7 @@ namespace reachability_map_visualizer_sample
     param->robot->rootLink()->w().setZero();
     std::vector<double> reset_manip_pose{
       0, 0,                               // wheel
-      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // joint
+      3.14, 1.57, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // joint
       0, 0,                               // hand       
     };
 
@@ -62,10 +61,17 @@ namespace reachability_map_visualizer_sample
     param->posResolution = 0.3;
     param->pikParam.maxIteration = 30;
     param->testPerGrid = 10;
-    param->origin = cnoid::Vector3(0.0, 0.0, 1.5); // IKが解けない時に無駄な計算をしてしまうので、ぎりぎりのサイズにしたほうが速い
-    param->size = cnoid::Vector3(4, 4, 3);
+    param->origin = cnoid::Vector3(-0.5, 0.0, 1.0); // IKが解けない時に無駄な計算をしてしまうので、ぎりぎりのサイズにしたほうが速い
+    param->size = cnoid::Vector3(3.2, 3.2, 2);
     param->weight[5] = 0.0;
     param->torque_limit = 10000;
+    return param;
+  }
+
+  void manta_tail()
+  {
+    std::shared_ptr<choreonoid_viewer::Viewer> viewer = std::make_shared<choreonoid_viewer::Viewer>();
+    std::shared_ptr<reachability_map_visualizer::ReachabilityMapParam> param = create_manta_tail_param();
     std::shared_ptr<reachability_map_visualizer::ReachabilityMap> map = std::make_shared<reachability_map_visualizer::ReachabilityMap>();
     reachability_map_visualizer::createMap(param, map,6);
 

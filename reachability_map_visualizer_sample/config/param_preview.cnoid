@@ -1,0 +1,84 @@
+items:
+  id: 0
+  name: "Root"
+  plugin: Base
+  class: RootItem
+  children:
+    -
+      id: 1
+      name: "ReachabilityMapVisualizerSamplePlugin"
+      plugin: ReachabilityMapVisualizerSamplePlugin
+      class: param_previewItem
+views:
+  -
+    id: 0
+    plugin: Base
+    class: SceneView
+    state:
+      floorGrid: false
+      background_color: [ 1.0, 1.0, 1.0 ]
+      cameras:
+        -
+          camera: [ System, Perspective ]
+          isCurrent: true
+          eye: [ 0.0, 5.0, 0.0 ]
+          direction: [ 0.0, -1.0, 0.0 ]
+          up: [ 0.0, 0.0, 1.0 ]
+viewAreas:
+  -
+    type: embedded
+    tabs: false
+    contents:
+      type: splitter
+      orientation: horizontal
+      sizes: [ 3769, 0 ]
+      children:
+        -
+          type: splitter
+          orientation: horizontal
+          sizes: [ 0, 3765 ]
+          children:
+            -
+              type: splitter
+              orientation: vertical
+              sizes: [ 994, 993 ]
+              children:
+                -
+                  type: pane
+                  views: [ 1 ]
+                -
+                  type: pane
+                  views: [ 0, 8 ]
+                  current: 0
+            -
+              type: splitter
+              orientation: vertical
+              sizes: [ 1987, 0 ]
+              children:
+                -
+                  type: pane
+                  views: [ 4 ]
+                -
+                  type: pane
+                  views: [ 3, 9 ]
+                  current: 3
+        -
+          type: splitter
+          orientation: vertical
+          sizes: [ 412, 1575 ]
+          children:
+            -
+              type: pane
+              views: [ 2 ]
+            -
+              type: splitter
+              orientation: vertical
+              sizes: [ 588, 983 ]
+              children:
+                -
+                  type: pane
+                  views: [ 7 ]
+                -
+                  type: pane
+                  views: [ 6, 5 ]
+                  current: 5

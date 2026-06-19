@@ -30,6 +30,7 @@ add_library(CnoidReachabilityMapVisualizerSamplePlugin SHARED
   src/jaxon_foot.cpp
   src/manta_tail.cpp
   src/visualize.cpp
+  src/param_preview.cpp
   src/solvability_bar.cpp
   )
 target_link_libraries(CnoidReachabilityMapVisualizerSamplePlugin

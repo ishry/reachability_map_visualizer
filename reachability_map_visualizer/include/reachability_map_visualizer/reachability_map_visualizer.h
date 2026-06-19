@@ -18,6 +18,13 @@ namespace reachability_map_visualizer {
     TorqueLimit(){};
     TorqueLimit(cnoid::LinkPtr joint, double limit) : joint(joint), limit(limit){};
   };
+  class SupportPoint {
+  public:
+    cnoid::LinkPtr parent = nullptr;
+    cnoid::Vector3 localPosition = cnoid::Vector3::Zero();
+    SupportPoint(){};
+    SupportPoint(cnoid::LinkPtr parent, const cnoid::Vector3& localPosition) : parent(parent), localPosition(localPosition){};
+  };
   class ReachabilityMapParam {
   public:
     cnoid::BodyPtr robot;
@@ -25,6 +32,7 @@ namespace reachability_map_visualizer {
     std::vector<cnoid::LinkPtr> variables;
     std::vector<cnoid::LinkPtr> torque_check_joints;
     std::vector<TorqueLimit> torque_limits;
+    std::vector<SupportPoint> support_points;
     std::vector<EndEffector> endEffectors;
     double posResolution = 0.1;
     int testPerGrid = 100;
@@ -34,6 +42,7 @@ namespace reachability_map_visualizer {
     cnoid::Vector6 weight; // ランダムに選んだ姿勢座標系
     prioritized_inverse_kinematics_solver2::IKParam pikParam;
     bool enable_torque_check = false;
+    bool enable_support_polygon_check = false;
     double torque_limit = 0;
     ReachabilityMapParam(){
       pikParam.maxIteration = 30;

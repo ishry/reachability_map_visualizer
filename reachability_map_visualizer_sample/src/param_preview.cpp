@@ -2,7 +2,11 @@
 #include <choreonoid_viewer/choreonoid_viewer.h>
 #include <cnoid/Body>
 #include <cnoid/MeshGenerator>
+#include <cnoid/SceneDrawables>
+#include <algorithm>
 #include <iostream>
+#include <string>
+#include <vector>
 
 namespace reachability_map_visualizer_sample
 {
@@ -10,6 +14,14 @@ namespace reachability_map_visualizer_sample
 
   namespace
   {
+    struct SupportPoint
+    {
+      std::string name;
+      cnoid::Vector3 position;
+    };
+
+    const double previewPlaneZ = -0.2;
+
     cnoid::SgMaterialPtr makeMaterial(const cnoid::Vector3f& color, double transparency)
     {
       cnoid::SgMaterialPtr material = new cnoid::SgMaterial();
@@ -60,6 +72,131 @@ namespace reachability_map_visualizer_sample
       return body;
     }
 
+    cnoid::Vector3 calcCenterOfMass(cnoid::BodyPtr robot)
+    {
+      robot->calcForwardKinematics();
+      return robot->calcCenterOfMass();
+    }
+
+    cnoid::BodyPtr makeCenterOfMassMarker(const cnoid::Vector3& centerOfMass)
+    {
+      cnoid::BodyPtr body = new cnoid::Body();
+      cnoid::LinkPtr rootLink = new cnoid::Link();
+      cnoid::MeshGenerator meshGenerator;
+
+      cnoid::SgPosTransformPtr centerOfMassTransform = new cnoid::SgPosTransform();
+      centerOfMassTransform->translation() = cnoid::Vector3(centerOfMass[0], centerOfMass[1], previewPlaneZ);
+      centerOfMassTransform->addChild(makeSphereShape(meshGenerator, 0.02, cnoid::Vector3f(1.0f, 0.0f, 0.8f), 0.0));
+      rootLink->addShapeNode(centerOfMassTransform);
+
+      body->setRootLink(rootLink);
+      return body;
+    }
+
+    bool appendSupportPoint(cnoid::BodyPtr robot,
+                            const std::string& label,
+                            const std::vector<std::string>& linkNameCandidates,
+                            std::vector<SupportPoint>& supportPoints)
+    {
+      for (int i = 0; i < linkNameCandidates.size(); i++) {
+        cnoid::LinkPtr link = robot->link(linkNameCandidates[i]);
+        if (link) {
+          supportPoints.push_back(SupportPoint{label, link->p()});
+          std::cerr << "support point " << label << " (" << linkNameCandidates[i] << ") : ["
+                    << link->p()[0] << ", " << link->p()[1] << ", " << link->p()[2] << "]" << std::endl;
+          return true;
+        }
+      }
+
+      std::cerr << "!support point link for " << label << std::endl;
+      return false;
+    }
+
+    std::vector<SupportPoint> getWheelSupportPoints(cnoid::BodyPtr robot)
+    {
+      std::vector<SupportPoint> supportPoints;
+      appendSupportPoint(robot, "right wheel", {"R_WHEEL_JOINT", "R_WHEEL"}, supportPoints);
+      appendSupportPoint(robot, "left wheel", {"L_WHEEL_JOINT", "L_WHEEL"}, supportPoints);
+      appendSupportPoint(robot, "omni wheel", {"OMNI_WHEEL_JOINT", "OMNI_WHEEL"}, supportPoints);
+      return supportPoints;
+    }
+
+    double cross2d(const SupportPoint& origin, const SupportPoint& a, const SupportPoint& b)
+    {
+      return (a.position[0] - origin.position[0]) * (b.position[1] - origin.position[1])
+           - (a.position[1] - origin.position[1]) * (b.position[0] - origin.position[0]);
+    }
+
+    std::vector<SupportPoint> calcSupportPolygon(std::vector<SupportPoint> supportPoints)
+    {
+      std::sort(supportPoints.begin(), supportPoints.end(), [](const SupportPoint& a, const SupportPoint& b) {
+        if (a.position[0] == b.position[0]) {
+          return a.position[1] < b.position[1];
+        }
+        return a.position[0] < b.position[0];
+      });
+
+      std::vector<SupportPoint> hull;
+      for (int i = 0; i < supportPoints.size(); i++) {
+        while (hull.size() >= 2 && cross2d(hull[hull.size() - 2], hull[hull.size() - 1], supportPoints[i]) <= 0.0) {
+          hull.pop_back();
+        }
+        hull.push_back(supportPoints[i]);
+      }
+
+      int lowerHullSize = hull.size();
+      for (int i = static_cast<int>(supportPoints.size()) - 2; i >= 0; i--) {
+        while (hull.size() > lowerHullSize && cross2d(hull[hull.size() - 2], hull[hull.size() - 1], supportPoints[i]) <= 0.0) {
+          hull.pop_back();
+        }
+        hull.push_back(supportPoints[i]);
+      }
+
+      if (!hull.empty()) {
+        hull.pop_back();
+      }
+      return hull;
+    }
+
+    cnoid::BodyPtr makeSupportPolygon(const std::vector<SupportPoint>& supportPoints)
+    {
+      cnoid::BodyPtr body = new cnoid::Body();
+      cnoid::LinkPtr rootLink = new cnoid::Link();
+      cnoid::MeshGenerator meshGenerator;
+
+      for (int i = 0; i < supportPoints.size(); i++) {
+        cnoid::SgPosTransformPtr supportPointTransform = new cnoid::SgPosTransform();
+        supportPointTransform->translation() = cnoid::Vector3(supportPoints[i].position[0], supportPoints[i].position[1], previewPlaneZ);
+        supportPointTransform->addChild(makeSphereShape(meshGenerator, 0.02, cnoid::Vector3f(0.0f, 1.0f, 1.0f), 0.0));
+        rootLink->addShapeNode(supportPointTransform);
+      }
+
+      std::vector<SupportPoint> polygon = calcSupportPolygon(supportPoints);
+      if (polygon.size() >= 2) {
+        cnoid::SgLineSetPtr lineSet = new cnoid::SgLineSet();
+        lineSet->setLineWidth(4.0);
+        lineSet->getOrCreateColors()->push_back(cnoid::Vector3f(0.0f, 1.0f, 0.2f));
+        cnoid::SgVertexArray* vertices = lineSet->getOrCreateVertices();
+        double polygonZ = previewPlaneZ + 0.01;
+
+        for (int i = 0; i < polygon.size(); i++) {
+          vertices->push_back(cnoid::Vector3f(polygon[i].position[0], polygon[i].position[1], polygonZ));
+        }
+
+        for (int i = 0; i < polygon.size(); i++) {
+          int next = (i + 1) % polygon.size();
+          lineSet->addLine(i, next);
+          lineSet->colorIndices().push_back(0);
+          lineSet->colorIndices().push_back(0);
+        }
+
+        rootLink->addShapeNode(lineSet);
+      }
+
+      body->setRootLink(rootLink);
+      return body;
+    }
+
     cnoid::BodyPtr makeFrame(const cnoid::Isometry3& pose)
     {
       cnoid::BodyPtr body = new cnoid::Body();
@@ -103,6 +240,10 @@ namespace reachability_map_visualizer_sample
 
     viewer->objects(param->robot);
     viewer->objects(makeSearchBox(param->origin, param->size));
+    cnoid::Vector3 centerOfMass = calcCenterOfMass(param->robot);
+    std::cerr << "center of mass : [" << centerOfMass[0] << ", " << centerOfMass[1] << ", " << centerOfMass[2] << "]" << std::endl;
+    viewer->objects(makeCenterOfMassMarker(centerOfMass));
+    viewer->objects(makeSupportPolygon(getWheelSupportPoints(param->robot)));
 
     for (int i = 0; i < param->endEffectors.size(); i++) {
       const reachability_map_visualizer::EndEffector& ee = param->endEffectors[i];

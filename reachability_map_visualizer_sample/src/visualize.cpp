@@ -18,7 +18,7 @@ namespace reachability_map_visualizer_sample{
     robot->rootLink()->w().setZero();
     std::vector<double> reset_manip_pose{
       0, 0, // wheel
-      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // joint
+      0, 1.57, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // joint
       0, 0, // hand
         };
 
@@ -30,7 +30,8 @@ namespace reachability_map_visualizer_sample{
     std::shared_ptr<reachability_map_visualizer::ReachabilityMap> map = std::make_shared<reachability_map_visualizer::ReachabilityMap>();
 
     reachability_map_visualizer::readMap(ros::package::getPath("reachability_map_visualizer_sample") + "/config/manta_tail.yaml",map);
-    map->boxSize = cnoid::Vector3(map->posResolution, map->posResolution, 0.001);
+    //map->boxSize = cnoid::Vector3(map->posResolution, map->posResolution, 0.001);
+    map->boxSize = cnoid::Vector3(0.05, 0.05, 0.001);
     viewer->objects(robot);
     reachability_map_visualizer::visualizeMap(map, viewer);
     viewer->drawObjects();

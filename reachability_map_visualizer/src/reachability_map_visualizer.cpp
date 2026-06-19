@@ -4,11 +4,66 @@
 #include <cnoid/YAMLWriter>
 #include <cnoid/YAMLReader>
 #include <cnoid/src/Body/InverseDynamics.h>
+#include <algorithm>
 #include <random>
 #include <vector>
 #include <iomanip>
 
 namespace reachability_map_visualizer {
+  double cross2d(const cnoid::Vector3& origin, const cnoid::Vector3& a, const cnoid::Vector3& b)
+  {
+    return (a[0] - origin[0]) * (b[1] - origin[1])
+         - (a[1] - origin[1]) * (b[0] - origin[0]);
+  }
+
+  std::vector<cnoid::Vector3> calcConvexHull2d(std::vector<cnoid::Vector3> points)
+  {
+    std::sort(points.begin(), points.end(), [](const cnoid::Vector3& a, const cnoid::Vector3& b) {
+      if (a[0] == b[0]) {
+        return a[1] < b[1];
+      }
+      return a[0] < b[0];
+    });
+
+    std::vector<cnoid::Vector3> hull;
+    for (int i = 0; i < points.size(); i++) {
+      while (hull.size() >= 2 && cross2d(hull[hull.size() - 2], hull[hull.size() - 1], points[i]) <= 0.0) {
+        hull.pop_back();
+      }
+      hull.push_back(points[i]);
+    }
+
+    int lowerHullSize = hull.size();
+    for (int i = static_cast<int>(points.size()) - 2; i >= 0; i--) {
+      while (hull.size() > lowerHullSize && cross2d(hull[hull.size() - 2], hull[hull.size() - 1], points[i]) <= 0.0) {
+        hull.pop_back();
+      }
+      hull.push_back(points[i]);
+    }
+
+    if (!hull.empty()) {
+      hull.pop_back();
+    }
+    return hull;
+  }
+
+  bool isPointInsideConvexPolygon2d(const cnoid::Vector3& point, const std::vector<cnoid::Vector3>& polygon)
+  {
+    if (polygon.size() < 3) return false;
+
+    bool hasPositive = false;
+    bool hasNegative = false;
+    for (int i = 0; i < polygon.size(); i++) {
+      const cnoid::Vector3& a = polygon[i];
+      const cnoid::Vector3& b = polygon[(i + 1) % polygon.size()];
+      double cross = cross2d(a, b, point);
+      if (cross > 1e-9) hasPositive = true;
+      if (cross < -1e-9) hasNegative = true;
+      if (hasPositive && hasNegative) return false;
+    }
+    return true;
+  }
+
   void frame2Link(const std::vector<double>& frame, const std::vector<cnoid::LinkPtr>& links){
     unsigned int i=0;
     for(int l=0;l<links.size();l++){
@@ -127,6 +182,26 @@ namespace reachability_map_visualizer {
     return is_valid;
   }
 
+  bool checkSupportPolygon(cnoid::BodyPtr& robot, const std::shared_ptr<ReachabilityMapParam>& param)
+  {
+    if (!param->enable_support_polygon_check) return true;
+    if (param->support_points.size() < 3) return false;
+
+    robot->calcForwardKinematics();
+    cnoid::Vector3 centerOfMass = robot->calcCenterOfMass();
+    std::vector<cnoid::Vector3> supportPoints;
+    for (int i = 0; i < param->support_points.size(); i++) {
+      if (!param->support_points[i].parent) continue;
+      cnoid::LinkPtr supportLink = robot->link(param->support_points[i].parent->index());
+      if (!supportLink) continue;
+      supportPoints.push_back(supportLink->T() * param->support_points[i].localPosition);
+    }
+    if (supportPoints.size() < 3) return false;
+
+    std::vector<cnoid::Vector3> supportPolygon = calcConvexHull2d(supportPoints);
+    return isPointInsideConvexPolygon2d(centerOfMass, supportPolygon);
+  }
+
   void createMapSub(const std::shared_ptr<ReachabilityMapParam>& param, const std::shared_ptr<ReachabilityMap>& map,
                     const std::vector<cnoid::Vector3>& xyz_table, const std::vector<double>& init_pose, std::mutex& mutex, int thread_num) {
     cnoid::BodyPtr tmp_robot;
@@ -188,6 +263,9 @@ namespace reachability_map_visualizer {
           if(solved && param->enable_torque_check){
             solved = checkTorque(std::ref(tmp_robot), std::ref(param), std::ref(mutex));
           }
+          if(solved && param->enable_support_polygon_check){
+            solved = checkSupportPolygon(std::ref(tmp_robot), std::ref(param));
+          }
 
           for (int sol=0;sol<param->initialSolutionNum && !solved;sol++) {
             std::vector<double> initialSolution;
@@ -202,6 +280,9 @@ namespace reachability_map_visualizer {
                                                                           );
 	          if(solved && param->enable_torque_check){
               solved = checkTorque(std::ref(tmp_robot), std::ref(param), std::ref(mutex));
+            }
+            if(solved && param->enable_support_polygon_check){
+              solved = checkSupportPolygon(std::ref(tmp_robot), std::ref(param));
             }
           }
           frame2Link(init_pose,tmp_variables);

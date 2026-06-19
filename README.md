@@ -24,9 +24,17 @@ choreonoid src/reachability_map_visualizer/reachability_map_visualizer_sample/co
 
 ```
 ### パラメタ確認
-- 計算領域・EE位置の確認が可能
+- 計算領域・EE位置等の確認が可能
+- 黄色マーカー：計算領域の中心
+- 紫マーカー：重心
+- 緑の領域：支持多角形
 ```
 catkin build reachability_map_visualizer_sample --no-deps
 source ~/catkin_ws/reachability_map_ws/devel/setup.bash
 choreonoid reachability_map_visualizer_sample/config/param_preview.cnoid 
 ```
+### solvability barの表示
+```
+choreonoid reachability_map_visualizer_sample/config/solvability_bar.cnoid 
+```
+- figで使いたいときなど

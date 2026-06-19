@@ -56,7 +56,7 @@ namespace reachability_map_visualizer_sample
     param->variables.push_back(param->robot->joint("TAIL_JOINT11"));
     
     // トルクリミット
-    param->enable_torque_check = true;
+    param->enable_torque_check = false;
     param->torque_limits.push_back(reachability_map_visualizer::TorqueLimit(param->robot->joint("TAIL_JOINT0"), 192.0));
     param->torque_limits.push_back(reachability_map_visualizer::TorqueLimit(param->robot->joint("TAIL_JOINT1"), 192.0));
     param->torque_limits.push_back(reachability_map_visualizer::TorqueLimit(param->robot->joint("TAIL_JOINT2"), 96.0));
@@ -69,15 +69,22 @@ namespace reachability_map_visualizer_sample
     param->torque_limits.push_back(reachability_map_visualizer::TorqueLimit(param->robot->joint("TAIL_JOINT9"), 96.0));
     param->torque_limits.push_back(reachability_map_visualizer::TorqueLimit(param->robot->joint("TAIL_JOINT10"), 96.0));
     param->torque_limits.push_back(reachability_map_visualizer::TorqueLimit(param->robot->joint("TAIL_JOINT11"), 96.0));
+
+    // 重心が支持多角形内にあるかをチェック
+    bool enable_support_polygon_check = true;
+    param->enable_support_polygon_check = enable_support_polygon_check;
+    param->support_points.push_back(reachability_map_visualizer::SupportPoint(param->robot->link("R_WHEEL_JOINT"), cnoid::Vector3::Zero()));
+    param->support_points.push_back(reachability_map_visualizer::SupportPoint(param->robot->link("L_WHEEL_JOINT"), cnoid::Vector3::Zero()));
+    param->support_points.push_back(reachability_map_visualizer::SupportPoint(param->robot->link("OMNI_WHEEL_JOINT"), cnoid::Vector3::Zero()));
     
     reachability_map_visualizer::EndEffector ee;
     ee.parent = param->robot->link("TAIL_JOINT11");
     ee.localPose.translation() = cnoid::Vector3(0.0, -0.25, 0.0);
     ee.localPose.linear() = cnoid::rotFromRpy(3.14, 0.0, -1.57);
     param->endEffectors.push_back(ee);
-    param->posResolution = 0.3;
+    param->posResolution = 0.1; // グリッドの大きさ
     param->pikParam.maxIteration = 30;
-    param->testPerGrid = 10;
+    param->testPerGrid = 10; //各グリッドの計算回数
     param->origin = cnoid::Vector3(-0.5, 0.0, 1.0); // IKが解けない時に無駄な計算をしてしまうので、ぎりぎりのサイズにしたほうが速い
     param->size = cnoid::Vector3(3.2, 3.2, 2);
     param->weight[5] = 0.0;
@@ -89,7 +96,7 @@ namespace reachability_map_visualizer_sample
     std::shared_ptr<choreonoid_viewer::Viewer> viewer = std::make_shared<choreonoid_viewer::Viewer>();
     std::shared_ptr<reachability_map_visualizer::ReachabilityMapParam> param = create_manta_tail_param();
     std::shared_ptr<reachability_map_visualizer::ReachabilityMap> map = std::make_shared<reachability_map_visualizer::ReachabilityMap>();
-    reachability_map_visualizer::createMap(param, map,6);
+    reachability_map_visualizer::createMap(param, map,8); //並列数
 
     reachability_map_visualizer::writeMap(ros::package::getPath("reachability_map_visualizer_sample") + "/config/manta_tail.yaml", map);
     viewer->objects(param->robot);

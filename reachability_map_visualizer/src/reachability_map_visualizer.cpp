@@ -7,7 +7,6 @@
 #include <random>
 #include <vector>
 #include <iomanip>
-#include <array>
 
 namespace reachability_map_visualizer {
   void frame2Link(const std::vector<double>& frame, const std::vector<cnoid::LinkPtr>& links){
@@ -69,30 +68,41 @@ namespace reachability_map_visualizer {
 
   bool checkTorque(cnoid::BodyPtr& robot, const std::shared_ptr<ReachabilityMapParam>& param, std::mutex& mutex)
   {
+    if (!param->enable_torque_check) return true;
+
     robot->rootLink()->dv() = cnoid::Vector3(0.0, 0.0, 9.8); //ルートリンクをz正に加速
     robot->rootLink()->dw().setZero();
     robot->calcForwardKinematics(true,true); // 重力加速度が各リンクに伝播される
     robot->calcCenterOfMass();
     cnoid::calcInverseDynamics(robot->rootLink()); // 重力補償トルクがtmp_robot->joint(j)->u()に書き込まれる
-    
-    // 有効な関節idを取得
-    bool is_valid_id[16] = {false};
-    for (const auto& var : param->variables) {
-      int id = var->jointId();
-      if (id >= 2 && id <= 13) is_valid_id[id] = true;
-    }
 
-    std::array<double, 16> checked_torques = {0.0};
-    double torque_limit = param->torque_limit;
-    
-    //check torque
-    for(int i = 0; i <= 15; ++i) {
-    if (is_valid_id[i]) {
-        double t = robot->joint(i)->u();
-        if (t < -torque_limit || t > torque_limit) {
-            return false; 
+    bool is_valid = true;
+    std::vector<cnoid::LinkPtr> checked_joints;
+    std::vector<double> checked_limits;
+    for (int i = 0; i < param->torque_limits.size(); i++) {
+      if (!param->torque_limits[i].joint) continue;
+      int joint_id = param->torque_limits[i].joint->jointId();
+      cnoid::LinkPtr joint = robot->joint(joint_id);
+      if (!joint) continue;
+      checked_joints.push_back(joint);
+      checked_limits.push_back(param->torque_limits[i].limit);
+      double torque = joint->u();
+      if (torque < -param->torque_limits[i].limit || torque > param->torque_limits[i].limit) {
+        is_valid = false;
+      }
+    }
+    if (param->torque_limits.empty()) {
+      for (int i = 0; i < param->torque_check_joints.size(); i++) {
+        if (!param->torque_check_joints[i]) continue;
+        int joint_id = param->torque_check_joints[i]->jointId();
+        cnoid::LinkPtr joint = robot->joint(joint_id);
+        if (!joint) continue;
+        checked_joints.push_back(joint);
+        checked_limits.push_back(param->torque_limit);
+        double torque = joint->u();
+        if (torque < -param->torque_limit || torque > param->torque_limit) {
+          is_valid = false;
         }
-        checked_torques[i] = t;
       }
     }
 
@@ -101,20 +111,20 @@ namespace reachability_map_visualizer {
       std::lock_guard<std::mutex> lock(mutex);
       std::cerr << "torque : [";
       std::cerr << std::fixed << std::setprecision(2);
-      for(int i = 2; i <= 13; ++i) {
-        std::cerr << std::setw(7) << checked_torques[i];
-        if(i < 13) std::cerr << ", ";
+      for(int i = 0; i < checked_joints.size(); ++i) {
+        std::cerr << checked_joints[i]->name() << ":" << std::setw(7) << checked_joints[i]->u() << "/" << checked_limits[i];
+        if(i < checked_joints.size() - 1) std::cerr << ", ";
       }
       std::cerr << "]" << std::endl;
 
       std::cerr << "q: [";
-        for(int i = 2; i <= 13; ++i) {
-            std::cerr << std::setw(5) << robot->joint(i)->q(); // ここで角度を取得
-            if(i < 13) std::cerr << ", ";
-        }
-        std::cerr << "]" << std::endl; // 最後に改行
+      for(int i = 0; i < checked_joints.size(); ++i) {
+        std::cerr << checked_joints[i]->name() << ":" << std::setw(5) << checked_joints[i]->q();
+        if(i < checked_joints.size() - 1) std::cerr << ", ";
+      }
+      std::cerr << "]" << std::endl; // 最後に改行
     }
-    return true;
+    return is_valid;
   }
 
   void createMapSub(const std::shared_ptr<ReachabilityMapParam>& param, const std::shared_ptr<ReachabilityMap>& map,
@@ -175,7 +185,7 @@ namespace reachability_map_visualizer {
                                                                        prevTasks,
                                                                        param->pikParam
                                                                        );
-          if(solved){
+          if(solved && param->enable_torque_check){
             solved = checkTorque(std::ref(tmp_robot), std::ref(param), std::ref(mutex));
           }
 
@@ -189,8 +199,8 @@ namespace reachability_map_visualizer {
                                                                          all_constraints,
                                                                          prevTasks,
                                                                          param->pikParam
-                                                                         );
-	          if(solved){
+                                                                          );
+	          if(solved && param->enable_torque_check){
               solved = checkTorque(std::ref(tmp_robot), std::ref(param), std::ref(mutex));
             }
           }

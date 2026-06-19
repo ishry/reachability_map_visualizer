@@ -22,7 +22,7 @@ namespace reachability_map_visualizer_sample
     param->robot->rootLink()->w().setZero();
     std::vector<double> reset_manip_pose{
       0, 0,                               // wheel
-      3.14, 1.57, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // joint
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // joint
       0, 0,                               // hand       
     };
 
@@ -41,6 +41,7 @@ namespace reachability_map_visualizer_sample
       constraints.push_back(constraint);
     }
     param->constraints.push_back(constraints);
+    // IKで使う変数
     param->variables.push_back(param->robot->joint("TAIL_JOINT0"));
     param->variables.push_back(param->robot->joint("TAIL_JOINT1"));
     param->variables.push_back(param->robot->joint("TAIL_JOINT2"));
@@ -53,6 +54,22 @@ namespace reachability_map_visualizer_sample
     param->variables.push_back(param->robot->joint("TAIL_JOINT9"));
     param->variables.push_back(param->robot->joint("TAIL_JOINT10"));
     param->variables.push_back(param->robot->joint("TAIL_JOINT11"));
+    
+    // トルクリミット
+    param->enable_torque_check = true;
+    param->torque_limits.push_back(reachability_map_visualizer::TorqueLimit(param->robot->joint("TAIL_JOINT0"), 192.0));
+    param->torque_limits.push_back(reachability_map_visualizer::TorqueLimit(param->robot->joint("TAIL_JOINT1"), 192.0));
+    param->torque_limits.push_back(reachability_map_visualizer::TorqueLimit(param->robot->joint("TAIL_JOINT2"), 96.0));
+    param->torque_limits.push_back(reachability_map_visualizer::TorqueLimit(param->robot->joint("TAIL_JOINT3"), 96.0));
+    param->torque_limits.push_back(reachability_map_visualizer::TorqueLimit(param->robot->joint("TAIL_JOINT4"), 96.0));
+    param->torque_limits.push_back(reachability_map_visualizer::TorqueLimit(param->robot->joint("TAIL_JOINT5"), 96.0));
+    param->torque_limits.push_back(reachability_map_visualizer::TorqueLimit(param->robot->joint("TAIL_JOINT6"), 96.0));
+    param->torque_limits.push_back(reachability_map_visualizer::TorqueLimit(param->robot->joint("TAIL_JOINT7"), 96.0));
+    param->torque_limits.push_back(reachability_map_visualizer::TorqueLimit(param->robot->joint("TAIL_JOINT8"), 96.0));
+    param->torque_limits.push_back(reachability_map_visualizer::TorqueLimit(param->robot->joint("TAIL_JOINT9"), 96.0));
+    param->torque_limits.push_back(reachability_map_visualizer::TorqueLimit(param->robot->joint("TAIL_JOINT10"), 96.0));
+    param->torque_limits.push_back(reachability_map_visualizer::TorqueLimit(param->robot->joint("TAIL_JOINT11"), 96.0));
+    
     reachability_map_visualizer::EndEffector ee;
     ee.parent = param->robot->link("TAIL_JOINT11");
     ee.localPose.translation() = cnoid::Vector3(0.0, -0.25, 0.0);
@@ -64,7 +81,6 @@ namespace reachability_map_visualizer_sample
     param->origin = cnoid::Vector3(-0.5, 0.0, 1.0); // IKが解けない時に無駄な計算をしてしまうので、ぎりぎりのサイズにしたほうが速い
     param->size = cnoid::Vector3(3.2, 3.2, 2);
     param->weight[5] = 0.0;
-    param->torque_limit = 10000;
     return param;
   }
 

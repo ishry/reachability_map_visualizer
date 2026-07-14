@@ -22,7 +22,7 @@ namespace reachability_map_visualizer_sample
     param->robot->rootLink()->w().setZero();
     std::vector<double> reset_manip_pose{
       0, 0,                               // wheel
-      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // joint
+      0, 0, 0, 0, 1.535, 0, 0, 0, 0, 0, 1.535, 0, // joint　// wrlで設定したjoint limitを超えているとエラーになる
       0, 0,                               // hand       
     };
 
@@ -46,14 +46,14 @@ namespace reachability_map_visualizer_sample
     param->variables.push_back(param->robot->joint("TAIL_JOINT1"));
     param->variables.push_back(param->robot->joint("TAIL_JOINT2"));
     param->variables.push_back(param->robot->joint("TAIL_JOINT3"));
-    param->variables.push_back(param->robot->joint("TAIL_JOINT4"));
-    param->variables.push_back(param->robot->joint("TAIL_JOINT5"));
-    param->variables.push_back(param->robot->joint("TAIL_JOINT6"));
-    param->variables.push_back(param->robot->joint("TAIL_JOINT7"));
-    param->variables.push_back(param->robot->joint("TAIL_JOINT8"));
-    param->variables.push_back(param->robot->joint("TAIL_JOINT9"));
-    param->variables.push_back(param->robot->joint("TAIL_JOINT10"));
-    param->variables.push_back(param->robot->joint("TAIL_JOINT11"));
+    // param->variables.push_back(param->robot->joint("TAIL_JOINT4"));
+    // param->variables.push_back(param->robot->joint("TAIL_JOINT5"));
+    // param->variables.push_back(param->robot->joint("TAIL_JOINT6"));
+    // param->variables.push_back(param->robot->joint("TAIL_JOINT7"));
+    // param->variables.push_back(param->robot->joint("TAIL_JOINT8"));
+    // param->variables.push_back(param->robot->joint("TAIL_JOINT9"));
+    // param->variables.push_back(param->robot->joint("TAIL_JOINT10"));
+    // param->variables.push_back(param->robot->joint("TAIL_JOINT11"));
     
     // トルクリミット
     param->enable_torque_check = false;
@@ -77,9 +77,10 @@ namespace reachability_map_visualizer_sample
     param->support_points.push_back(reachability_map_visualizer::SupportPoint(param->robot->link("L_WHEEL_JOINT"), cnoid::Vector3::Zero()));
     param->support_points.push_back(reachability_map_visualizer::SupportPoint(param->robot->link("OMNI_WHEEL_JOINT"), cnoid::Vector3::Zero()));
     
+    // エンドエフェクタ設定
     reachability_map_visualizer::EndEffector ee;
     ee.parent = param->robot->link("TAIL_JOINT11");
-    ee.localPose.translation() = cnoid::Vector3(0.0, -0.25, 0.0);
+    ee.localPose.translation() = cnoid::Vector3(0.0, -0.1, 0.3);
     ee.localPose.linear() = cnoid::rotFromRpy(3.14, 0.0, -1.57);
     param->endEffectors.push_back(ee);
     param->posResolution = 0.1; // グリッドの大きさ
